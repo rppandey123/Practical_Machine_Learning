@@ -1,0 +1,99 @@
+---
+title: "Machine Learning Assignment"
+author: 'null'
+date: "Sunday, January 25, 2015"
+output:
+  html_document:
+    keep_md: yes
+---
+Loading initial directories and reading data
+
+```{r}
+## Load relevant libraries
+
+library(caret)
+library(randomForest)
+library(Hmisc)
+library(foreach)
+library(doParallel)
+
+## Set seed to ensure code  reproducibility
+
+set.seed(2211)
+
+## Read the data
+setwd("C:/Users/rahul pandey/Dropbox/11 Analytics/02 Assignments/08 Practical Machine Learning/Assignment")
+TrainData <- read.csv("pml-training.csv", na.strings=c("NA",""), strip.white=T)
+TestData <- read.csv("pml-testing.csv", na.strings=c("NA",""), strip.white=T)
+dim(TrainData)
+```
+
+The initial data has 19000+ rows and 160 columns. To remove data on which we can't process, we remove columns that have NAs
+
+```{r, echo=FALSE}
+## We create cleaner dataset by removing columns that have NAs
+## Code below refernces http://stackoverflow.com/questions/12454487/remove-columns-from-dataframe-where-some-of-values-are-na
+
+colNA <- apply(TrainData, 2, function(x) { sum(is.na(x)) }) 
+TrainData <- subset(TrainData[, which(colNA == 0)])
+dim(TrainData)
+head(TrainData)
+```
+ 
+Now the number of rows have been reduced to around 60, we remove redundant columns
+
+```{r}
+## The following appear redundant raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, ## new_window,num_window)
+
+TrainData <- subset(TrainData[], select=-c(new_window, num_window, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp))
+
+
+## columns removed succesfully ?
+dim(TrainData)
+```
+
+The next section creates training and testing database, and trains the model on training DB
+
+```{r}
+## We now ceate the training and testing datasets
+itTrain <- createDataPartition(y=TrainData$classe, p=0.7, list=FALSE)
+training <- TrainData[itTrain,]
+testing <- TrainData[-itTrain,]
+
+dim(training); dim(testing)
+
+## Now train the model
+ControlVariable <- trainControl(allowParallel=T, method="cv", number=4)
+model <- train(classe ~ ., data=training, model="rf", trControl=ControlVariable)
+
+## Finding the important variables
+varImp(model)
+```
+
+We can see that roll_belt, pitch_forearm, accel_belt_z, roll_dumbbell are the most important parameters
+
+```{r}
+## Now the predictions and accuracy
+pred <- predict(model, newdata=testing)
+sum(pred == testing$classe) / length(pred)
+confusionMatrix(testing$classe, pred)$table
+```
+
+## For some strange reasons we are getting 100% accuracy, there could be issues. So testing on test data
+
+```{r}
+colNA <- apply(TestData, 2, function(x) { sum(is.na(x)) })
+TestData <- subset(TestData[, which(colNA == 0)])
+
+TestData <- subset(TestData[], select=-c(new_window, num_window, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp))
+
+pred1 <- predict(model, newdata=TestData)
+sum(pred1 == testing$classe) / length(pred1)
+
+
+
+```
+
+Model has an accuracy of 83%. Thus suggesting a fairly robust training model
+
+
